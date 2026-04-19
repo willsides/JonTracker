@@ -1,21 +1,45 @@
 services:
   jontracker:
-    image: ghcr.io/YOUR_GITHUB_USERNAME/jontracker:latest
+    container_name: jontracker
+    image: ghcr.io/willsides/jontracker:latest
+    restart: unless-stopped
     ports:
       - "5000:5000"
-    env_file:
-      - .env
+    environment:
+      - MAPSHARE_ID_FILE=/run/secrets/mapshare_id
+      - EMAIL_ADDRESS_FILE=/run/secrets/email_address
+      - EMAIL_APP_PASSWORD_FILE=/run/secrets/email_app_password
+      - STADIA_API_KEY_FILE=/run/secrets/stadia_api_key
+      - SECRET_KEY_FILE=/run/secrets/secret_key
+      - GARMIN_POLL_INTERVAL=300
+      - EMAIL_IMAP_SERVER=imap.gmail.com
+      - EMAIL_POLL_INTERVAL=60
+      - MAX_PHOTOS=200
+      - SLIDESHOW_INTERVAL=8
+      - FLASK_HOST=0.0.0.0
+      - FLASK_PORT=5000
+    secrets:
+      - mapshare_id
+      - email_address
+      - email_app_password
+      - stadia_api_key
+      - secret_key
     volumes:
       - photos:/app/static/photos
-    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
 
-  watchtower:
-    image: containrrr/watchtower
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /root/.docker/config.json:/config.json  # registry credentials
-    command: --interval 300 jontracker          # check every 5 minutes
-    restart: unless-stopped
+secrets:
+  mapshare_id:
+    file: /mnt/DataStore/Apps/secrets/jontracker_mapshare_id
+  email_address:
+    file: /mnt/DataStore/Apps/secrets/jontracker_email_address
+  email_app_password:
+    file: /mnt/DataStore/Apps/secrets/jontracker_email_app_password
+  stadia_api_key:
+    file: /mnt/DataStore/Apps/secrets/jontracker_stadia_api_key
+  secret_key:
+    file: /mnt/DataStore/Apps/secrets/jontracker_secret_key
 
 volumes:
   photos:
