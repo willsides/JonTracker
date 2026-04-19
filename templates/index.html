@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JonTracker</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    #header {
+      background: #111;
+      border-bottom: 1px solid #222;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      height: 52px;
+    }
+    #header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; }
+    #header h1 span { color: #f97316; }
+    #status-bar { display: flex; gap: 24px; font-size: 0.78rem; color: #888; }
+    #status-bar .item { display: flex; align-items: center; gap: 6px; }
+    #status-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; }
+    #status-bar .dot.ok { background: #22c55e; }
+    #status-bar .dot.warn { background: #f97316; }
+    #status-bar .dot.err { background: #ef4444; }
+
+    /* ── Map + Photo row ── */
+    #content { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+
+    /* ── Map panel ── */
+    #map-panel { flex: 1; position: relative; border-right: 1px solid #222; }
+    #map { height: 100%; width: 100%; }
+
+    /* ── Radar toolbar ── */
+
+    /* ── Zoom level indicator ── */
+
+    /* ── Location overlay ── */
+    #location-overlay {
+      position: absolute; bottom: 16px; left: 16px; z-index: 1000;
+      background: rgba(0,0,0,0.75); border: 1px solid #333; border-radius: 8px;
+      padding: 10px 14px; font-size: 0.78rem; line-height: 1.6;
+      backdrop-filter: blur(4px); max-width: 260px; display: none;
+    }
+    #location-overlay .label { color: #888; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    #location-overlay .coords { color: #fff; font-variant-numeric: tabular-nums; }
+    #location-overlay .ts { color: #aaa; }
+    #location-overlay .msg { color: #f97316; margin-top: 4px; font-style: italic; }
+
+    #no-location {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 1000; text-align: center; color: #555; pointer-events: none;
+    }
+    #no-location .icon { font-size: 3rem; margin-bottom: 8px; }
+    #no-location p { font-size: 0.85rem; }
+
+    /* ── Photo panel ── */
+    #photo-panel { width: 50%; position: relative; background: #000; display: flex; flex-direction: column; }
+    #slideshow { flex: 1; position: relative; overflow: hidden; }
+    .slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.8s ease; }
+    .slide.active { opacity: 1; }
+    .slide img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+
+    #no-photos {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: #333; text-align: center; padding: 24px;
+    }
+    #no-photos .icon { font-size: 4rem; margin-bottom: 12px; }
+    #no-photos p { font-size: 0.85rem; line-height: 1.5; }
+    #no-photos code { background: #1a1a1a; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; color: #f97316; }
+
+    #photo-footer {
+      background: #111; border-top: 1px solid #222;
+      padding: 8px 16px; display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.75rem; color: #555; flex-shrink: 0; height: 36px;
+    }
+    #photo-name { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
+    #progress-bar { height: 2px; background: #1a1a1a; flex-shrink: 0; }
+    #progress-fill { height: 100%; background: #f97316; width: 0%; transition: width 0.1s linear; }
+
+    /* ── Elevation panel ── */
+    #elevation-panel {
+      flex-shrink: 0;
+      height: 145px;
+      background: #0a0a0a;
+      border-top: 1px solid #222;
+      position: relative;
+      display: none;  /* shown once profile loads */
+    }
+    #elevation-panel.visible { display: block; }
+
+    #elevation-canvas-wrap {
+      position: absolute;
+      inset: 8px 16px 4px 16px;
+    }
+
+    /* Position info badge */
+    #elev-info {
+      position: absolute;
+      top: 10px;
+      right: 24px;
+      background: rgba(0,0,0,0.6);
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.72rem;
+      color: #888;
+      line-height: 1.5;
+      pointer-events: none;
+      display: none;
+    }
+    #elev-info.visible { display: block; }
+    #elev-info .mile { color: #f97316; font-weight: 600; font-size: 0.8rem; }
+    #elev-info .alt  { color: #cbd5e1; }
+
+    /* No-elevation message */
+    #elev-no-data {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #333; font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="header">
+    <h1>Jon<span>Tracker</span></h1>
+    <div id="status-bar">
+      <div class="item">
+        <div class="dot" id="gps-dot"></div>
+        <span id="gps-status">GPS: --</span>
+      </div>
+      <div class="item">
+        <div class="dot" style="background:#22c55e"></div>
+        <span id="email-status">Photos: --</span>
+      </div>
+      <div class="item"><span id="clock"></span></div>
+    </div>
+  </div>
+
+  <!-- Map + Photos -->
+  <div id="content">
+    <div id="map-panel">
+      <div id="map"></div>
+      <div id="no-location">
+        <div class="icon">&#x1F4E1;</div>
+        <p>Waiting for GPS signal<br>from inReach device&hellip;</p>
+      </div>
+
+      <div id="location-overlay">
+        <div class="label">Last known position</div>
+        <div class="coords" id="overlay-coords">--</div>
+        <div class="ts" id="overlay-ts"></div>
+        <div class="msg" id="overlay-msg"></div>
+      </div>
+    </div>
+
+    <div id="photo-panel">
+      <div id="slideshow">
+        <div id="no-photos">
+          <div class="icon">&#x1F4F7;</div>
+          <p>No photos yet.<br><br>
+          Email photos to<br>
+          <code id="email-hint">the configured address</code><br><br>
+          and they'll appear here automatically.</p>
+        </div>
+      </div>
+      <div id="progress-bar"><div id="progress-fill"></div></div>
+      <div id="photo-footer">
+        <span id="photo-counter"></span>
+        <span id="photo-name"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Elevation profile strip -->
+  <div id="elevation-panel">
+    <div id="elevation-canvas-wrap">
+      <canvas id="elevation-chart"></canvas>
+    </div>
+    <div id="elev-info">
+      <div class="mile" id="elev-mile"></div>
+      <div class="alt" id="elev-alt"></div>
+    </div>
+    <div id="elev-no-data">Elevation data unavailable — add Z coordinates to pct.geojson</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <script>
+    // ── Config ────────────────────────────────────────────────────────────
+    const SLIDESHOW_INTERVAL = {{ slideshow_interval }} * 1000;
+    const STADIA_API_KEY     = "{{ stadia_api_key }}";
+    const HAS_PCT            = {{ 'true' if has_pct else 'false' }};
+
+    const LOCATION_REFRESH = 30 * 1000;
+    const PHOTOS_REFRESH   = 20 * 1000;
+
+    const PCT_BOUNDS = [[32.5, -124.5], [49.1, -116.5]];
+
+    // ── Map ───────────────────────────────────────────────────────────────
+    const map = L.map("map", { zoomControl: false, attributionControl: false });
+    map.fitBounds(PCT_BOUNDS);
+
+    if (STADIA_API_KEY) {
+      // Stamen Terrain: nominally available up to zoom 14+. Leaflet will
+      // upscale if a zoom level has no tiles.
+      // upscales those tiles for higher zoom levels instead of fetching
+      // non-existent ones (which return a "Zoom Level Not Supported" image).
+      L.tileLayer(
+        `https://tiles.stadiamaps.com/tiles/stamen_terrain/{z}/{x}/{y}.png?api_key=${STADIA_API_KEY}`,
+        { maxNativeZoom: 14, maxZoom: 19 }
+      ).addTo(map);
+    } else {
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    }
+
+    // ── PCT trail overlay ─────────────────────────────────────────────────
+    if (HAS_PCT) {
+      fetch("/api/pct-trail")
+        .then(r => r.json())
+        .then(geojson => {
+          if (!geojson) return;
+          L.geoJSON(geojson, { style: { color: "#dc2626", weight: 2, opacity: 0.75 } }).addTo(map);
+        })
+        .catch(() => {});
+    }
+
+    // ── GPS marker ────────────────────────────────────────────────────────
+    const markerIcon = L.divIcon({
+      className: "",
+      html: `<div style="width:18px;height:18px;background:#f97316;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #f97316,0 2px 8px rgba(0,0,0,0.5)"></div>`,
+      iconSize: [18, 18], iconAnchor: [9, 9],
+    });
+
+    let marker = null;
+    let currentLat = null;
+    let currentLon = null;
+
+    function updateLocation() {
+      fetch("/api/location")
+        .then(r => r.json())
+        .then(data => {
+          const dot = document.getElementById("gps-dot");
+          const statusEl = document.getElementById("gps-status");
+
+          if (data.lat !== null && data.lon !== null) {
+            const latlng = [data.lat, data.lon];
+            if (!marker) {
+              marker = L.marker(latlng, { icon: markerIcon }).addTo(map);
+            } else {
+              marker.setLatLng(latlng);
+            }
+
+            currentLat = data.lat;
+            currentLon = data.lon;
+
+            document.getElementById("no-location").style.display = "none";
+            document.getElementById("location-overlay").style.display = "block";
+
+            const lat = data.lat.toFixed(5), lon = data.lon.toFixed(5);
+            document.getElementById("overlay-coords").textContent = `${lat}, ${lon}`;
+            if (data.timestamp) {
+              const d = new Date(data.timestamp);
+              document.getElementById("overlay-ts").textContent = isNaN(d) ? data.timestamp : d.toLocaleString();
+            }
+            document.getElementById("overlay-msg").textContent = data.message ? `"${data.message}"` : "";
+
+            dot.className = "dot ok";
+            statusEl.textContent = `GPS: ${lat}, ${lon}`;
+
+            updateElevationMarker(data.lat, data.lon);
+
+            // If already in a zoomed level, re-center on the updated position
+            if (zoomLevel > 0) applyZoom(zoomLevel);
+          } else {
+            dot.className = "dot warn";
+            statusEl.textContent = data.error ? "GPS: error" : "GPS: waiting…";
+          }
+        })
+        .catch(() => {
+          document.getElementById("gps-dot").className = "dot err";
+          document.getElementById("gps-status").textContent = "GPS: offline";
+        });
+    }
+
+    // ── Zoom cycling ──────────────────────────────────────────────────────
+    // Three levels: 0 = full PCT, 1 = 500mi FOV, 2 = 100mi FOV
+    // Zoom levels chosen for the PCT's latitude band (~33–49°N).
+    // Level 1 at zoom 6 covers ~500mi width; level 2 at zoom 9 covers ~100mi.
+    const ZOOM_CYCLE_INTERVAL = 15000;
+    const ZOOM_LEVELS = [
+      { fovMiles: null, zoom: null },   // 0: full PCT — use fitBounds
+      { fovMiles: 500,  zoom: 7    },   // 1: ~500mi FOV
+      { fovMiles: 100,  zoom: 11   },   // 2: ~100mi FOV
+    ];
+
+    let zoomLevel = 0;
+    let zoomCycleTimer = null;
+
+
+    function applyZoom(level) {
+      if (level === 0 || currentLat === null) {
+        // Full PCT view
+        map.fitBounds(PCT_BOUNDS, { animate: true, padding: [10, 10], duration: 6 });
+        setChartWindow(0, elevProfile?.total_miles ?? 2615);
+      } else {
+        const { fovMiles, zoom } = ZOOM_LEVELS[level];
+        map.setView([currentLat, currentLon], zoom, { animate: true, duration: 6 });
+        const half = fovMiles / 2;
+        const total = elevProfile?.total_miles ?? 2615;
+        setChartWindow(
+          Math.max(0, (currentMile ?? 0) - half),
+          Math.min(total, (currentMile ?? total) + half)
+        );
+      }
+    }
+
+    function advanceZoom() {
+      zoomLevel = (zoomLevel + 1) % 3;
+      applyZoom(zoomLevel);
+    }
+
+    function startZoomCycle() {
+      if (zoomCycleTimer) clearInterval(zoomCycleTimer);
+      zoomLevel = 0;
+      applyZoom(0);
+      zoomCycleTimer = setInterval(advanceZoom, ZOOM_CYCLE_INTERVAL);
+    }
+
+    // ── RainViewer Radar ──────────────────────────────────────────────────
+    // ── Radar ─────────────────────────────────────────────────────────────
+    const RADAR_OPACITY    = 0.55;
+    const RADAR_REFRESH    = 5 * 60 * 1000;
+    const FRAME_DURATION   = 400;
+    let radarFrames = [], radarLayers = [], radarIndex = 0, radarTimer = null;
+
+    function radarTileUrl(path) {
+      return `https://tilecache.rainviewer.com${path}/256/{z}/{x}/{y}/4/1_1.png`;
+    }
+
+    function showRadarFrame(idx) {
+      radarLayers.forEach((layer, i) => layer.setOpacity(i === idx ? RADAR_OPACITY : 0));
+      radarIndex = idx;
+    }
+
+    function buildRadarLayers(frames) {
+      radarLayers.forEach(l => map.removeLayer(l));
+      radarLayers = frames.map(frame => {
+        const layer = L.tileLayer(radarTileUrl(frame.path), { tileSize: 256, opacity: 0, zIndex: 10, maxNativeZoom: 7, maxZoom: 19 });
+        layer.addTo(map);
+        return layer;
+      });
+      radarFrames = frames;
+      radarIndex = frames.length - 1;
+      showRadarFrame(radarIndex);
+      if (radarTimer) clearInterval(radarTimer);
+      radarTimer = setInterval(() => showRadarFrame((radarIndex + 1) % radarFrames.length), FRAME_DURATION);
+    }
+
+    function fetchRadar() {
+      fetch("https://api.rainviewer.com/public/weather-maps.json")
+        .then(r => r.json())
+        .then(data => { if (data.radar.past?.length) buildRadarLayers(data.radar.past); })
+        .catch(() => {});
+    }
+
+    // ── Elevation profile ─────────────────────────────────────────────────
+    let elevProfile = null;
+    let elevChart   = null;
+    let currentMile = null;
+    let currentEle  = null;
+
+    function setChartWindow(minMile, maxMile) {
+      if (!elevChart) return;
+      elevChart.options.scales.x.min = minMile;
+      elevChart.options.scales.x.max = maxMile;
+      elevChart.update("none");
+    }
+
+    // Chart.js plugin: draws the position marker line + dot
+    const positionMarkerPlugin = {
+      id: "positionMarker",
+      afterDraw(chart) {
+        if (currentMile === null) return;
+        const { ctx, chartArea: { top, bottom }, scales: { x, y } } = chart;
+        const px = x.getPixelForValue(currentMile);
+
+        ctx.save();
+
+        // Vertical dashed line
+        ctx.beginPath();
+        ctx.moveTo(px, top);
+        ctx.lineTo(px, bottom);
+        ctx.strokeStyle = "#f97316";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.globalAlpha = 0.9;
+        ctx.stroke();
+
+        // Dot at elevation
+        if (currentEle !== null) {
+          const py = y.getPixelForValue(currentEle);
+          ctx.beginPath();
+          ctx.arc(px, py, 6, 0, Math.PI * 2);
+          ctx.fillStyle = "#f97316";
+          ctx.globalAlpha = 1;
+          ctx.setLineDash([]);
+          ctx.fill();
+          ctx.strokeStyle = "#fff";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        ctx.restore();
+      },
+    };
+
+    function buildElevationChart(points) {
+      const canvas = document.getElementById("elevation-chart");
+      const ctx = canvas.getContext("2d");
+
+      // Gradient fill
+      const gradient = ctx.createLinearGradient(0, 0, 0, 110);
+      gradient.addColorStop(0,   "rgba(148,163,184,0.22)");
+      gradient.addColorStop(1,   "rgba(148,163,184,0.01)");
+
+      elevChart = new Chart(ctx, {
+        type: "line",
+        data: {
+          datasets: [{
+            data: points.map(p => ({ x: p.dist, y: p.ele })),
+            borderColor: "#94a3b8",
+            borderWidth: 1.5,
+            backgroundColor: gradient,
+            fill: true,
+            pointRadius: 0,
+            tension: 0.2,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          scales: {
+            x: {
+              type: "linear",
+              min: 0,
+              max: elevProfile.total_miles,
+              ticks: {
+                color: "#444",
+                maxTicksLimit: 14,
+                callback: v => `${Math.round(v)}mi`,
+              },
+              grid: { color: "#161616" },
+              border: { color: "#2a2a2a" },
+            },
+            y: {
+              ticks: {
+                color: "#444",
+                maxTicksLimit: 4,
+                callback: v => `${v.toLocaleString()}ft`,
+              },
+              grid: { color: "#161616" },
+              border: { color: "#2a2a2a" },
+            },
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { enabled: false },
+          },
+        },
+        plugins: [positionMarkerPlugin],
+      });
+    }
+
+    function loadElevationProfile() {
+      if (!HAS_PCT) return;
+
+      fetch("/api/elevation-profile")
+        .then(r => r.json())
+        .then(data => {
+          if (!data || !data.points.length) return;
+
+          elevProfile = data;
+          const panel = document.getElementById("elevation-panel");
+          panel.classList.add("visible");
+
+          if (!data.has_elevation) {
+            document.getElementById("elev-no-data").style.display = "flex";
+            return;
+          }
+          document.getElementById("elev-no-data").style.display = "none";
+          buildElevationChart(data.points);
+        })
+        .catch(() => {});
+    }
+
+    // Given a GPS fix, find the nearest PCT profile point and update the chart marker
+    function updateElevationMarker(lat, lon) {
+      if (!elevProfile || !elevProfile.has_elevation || !elevChart) return;
+
+      const points = elevProfile.points;
+      let nearest = null;
+      let minDist2 = Infinity;
+      const cosLat = Math.cos(lat * Math.PI / 180);
+
+      for (const p of points) {
+        const dlat = p.lat - lat;
+        const dlon = (p.lon - lon) * cosLat;
+        const d2 = dlat * dlat + dlon * dlon;
+        if (d2 < minDist2) { minDist2 = d2; nearest = p; }
+      }
+
+      if (!nearest) return;
+
+      currentMile = nearest.dist;
+      currentEle  = nearest.ele;
+      elevChart.update("none");
+
+      // Update info badge
+      const info = document.getElementById("elev-info");
+      info.classList.add("visible");
+      document.getElementById("elev-mile").textContent = `Mile ${Math.round(currentMile)}`;
+      document.getElementById("elev-alt").textContent  = `${currentEle.toLocaleString()} ft`;
+    }
+
+    // ── Slideshow ─────────────────────────────────────────────────────────
+    let photos = [], currentIndex = 0, slides = [];
+    let progressTimer = null, progressStart = null;
+
+    function updatePhotos() {
+      fetch("/api/photos")
+        .then(r => r.json())
+        .then(data => {
+          const newPhotos = data.photos || [];
+          if (newPhotos.length !== photos.length) { photos = newPhotos; rebuildSlideshow(); }
+          document.getElementById("email-status").textContent = `Photos: ${photos.length}`;
+        });
+    }
+
+    function rebuildSlideshow() {
+      const container = document.getElementById("slideshow");
+      slides.forEach(s => s.parentNode?.removeChild(s));
+      slides = [];
+      const noPhotos = document.getElementById("no-photos");
+      if (!photos.length) {
+        noPhotos.style.display = "flex";
+        document.getElementById("photo-counter").textContent = "";
+        document.getElementById("photo-name").textContent = "";
+        return;
+      }
+      noPhotos.style.display = "none";
+      photos.forEach(filename => {
+        const slide = document.createElement("div");
+        slide.className = "slide";
+        const img = document.createElement("img");
+        img.src = `/photos/${encodeURIComponent(filename)}`;
+        img.alt = filename;
+        slide.appendChild(img);
+        container.appendChild(slide);
+        slides.push(slide);
+      });
+      if (currentIndex >= slides.length) currentIndex = 0;
+      showSlide(currentIndex);
+    }
+
+    function showSlide(index) {
+      slides.forEach((s, i) => s.classList.toggle("active", i === index));
+      currentIndex = index;
+      const name = (photos[index] || "").replace(/^\d{8}_\d{6}_/, "");
+      document.getElementById("photo-counter").textContent = `${index + 1} / ${photos.length}`;
+      document.getElementById("photo-name").textContent = name;
+      startProgress();
+    }
+
+    function nextSlide() {
+      if (slides.length) showSlide((currentIndex + 1) % slides.length);
+    }
+
+    function startProgress() {
+      if (progressTimer) clearInterval(progressTimer);
+      const fill = document.getElementById("progress-fill");
+      fill.style.transition = "none";
+      fill.style.width = "0%";
+      progressStart = Date.now();
+      progressTimer = setInterval(() => {
+        const pct = Math.min(((Date.now() - progressStart) / SLIDESHOW_INTERVAL) * 100, 100);
+        fill.style.transition = "width 0.1s linear";
+        fill.style.width = pct + "%";
+        if (pct >= 100) { clearInterval(progressTimer); nextSlide(); }
+      }, 100);
+    }
+
+    // ── Clock ─────────────────────────────────────────────────────────────
+    function updateClock() {
+      document.getElementById("clock").textContent = new Date().toLocaleTimeString([], {
+        hour: "2-digit", minute: "2-digit", second: "2-digit",
+      });
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────
+    updateLocation();
+    updatePhotos();
+    updateClock();
+    fetchRadar();
+    loadElevationProfile();
+    startZoomCycle();
+
+    setInterval(updateLocation, LOCATION_REFRESH);
+    setInterval(updatePhotos,  PHOTOS_REFRESH);
+    setInterval(updateClock,   1000);
+    setInterval(fetchRadar,    RADAR_REFRESH);
+  </script>
+</body>
+</html>

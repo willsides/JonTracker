@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+static/photos/
+*.Zone.Identifier
+setup/
+.claude/
+CLAUDE.md
