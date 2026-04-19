@@ -110,12 +110,10 @@ def index():
 # Entry point
 # ---------------------------------------------------------------------------
 
+os.makedirs(config.PHOTOS_DIR, exist_ok=True)
+garmin.start_poller()
+email_receiver.start_poller()
+
 if __name__ == "__main__":
-    os.makedirs(config.PHOTOS_DIR, exist_ok=True)
-
-    # Start background pollers
-    garmin.start_poller()
-    email_receiver.start_poller()
-
     logger.info("Starting JonTracker on %s:%d", config.FLASK_HOST, config.FLASK_PORT)
     app.run(host=config.FLASK_HOST, port=config.FLASK_PORT, debug=False, use_reloader=False)
