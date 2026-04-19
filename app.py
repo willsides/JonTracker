@@ -1,6 +1,5 @@
 """
-JonTracker — Raspberry Pi display server.
-Serves a fullscreen kiosk page showing:
+JonTracker — web server for real-time GPS tracking and photo slideshows.
   - Left: Leaflet.js map with latest Garmin inReach GPS location
   - Right: Slideshow of photos received via email
 """
