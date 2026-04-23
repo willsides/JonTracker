@@ -7,12 +7,15 @@ The person in the field emails photos to that address.
 
 import email
 import imaplib
+import io
 import logging
 import os
 import threading
 import time
 from datetime import datetime, timezone
 from email.header import decode_header
+
+from PIL import Image
 
 import config
 
@@ -39,6 +42,21 @@ def _decode_header_value(value):
     return "".join(decoded)
 
 
+def _exif_capture_date(data, ext):
+    """Return the EXIF DateTimeOriginal from image bytes, or None if unavailable."""
+    if ext.lower() not in ('.jpg', '.jpeg', '.webp', '.tiff'):
+        return None
+    try:
+        exif = Image.open(io.BytesIO(data)).getexif()
+        for tag_id in (36867, 36868, 306):  # DateTimeOriginal, DateTimeDigitized, DateTime
+            val = exif.get(tag_id)
+            if val:
+                return datetime.strptime(val, "%Y:%m:%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    return None
+
+
 def _save_attachment(part, received_dt):
     """Save a single MIME attachment to the photos directory. Returns saved path or None."""
     filename = part.get_filename()
@@ -51,22 +69,31 @@ def _save_attachment(part, received_dt):
         logger.debug("Skipping non-photo attachment: %s", filename)
         return None
 
-    os.makedirs(config.PHOTOS_DIR, exist_ok=True)
-
-    # Prefix with timestamp so slideshow can sort by receipt order
-    ts = received_dt.strftime("%Y%m%d_%H%M%S")
-    base, extension = os.path.splitext(filename)
-    dest = os.path.join(config.PHOTOS_DIR, f"{ts}_{base}{extension}")
-
-    # Avoid overwriting if two attachments arrive in the same second
-    counter = 1
-    while os.path.exists(dest):
-        dest = os.path.join(config.PHOTOS_DIR, f"{ts}_{base}_{counter}{extension}")
-        counter += 1
-
     data = part.get_payload(decode=True)
     if not data:
         return None
+
+    os.makedirs(config.PHOTOS_DIR, exist_ok=True)
+
+    # Use EXIF capture date if available, fall back to email received date.
+    # Marker E = EXIF date (shown to user), R = received date (sort only, not shown).
+    exif_dt = _exif_capture_date(data, ext)
+    photo_dt = exif_dt or received_dt
+    marker = "E" if exif_dt else "R"
+    ts = photo_dt.strftime("%Y%m%d_%H%M%S")
+    base, extension = os.path.splitext(filename)
+    dest = os.path.join(config.PHOTOS_DIR, f"{ts}_{marker}_{base}{extension}")
+
+    # Skip if already saved (e.g. after a container restart scanning ALL mail)
+    if os.path.exists(dest):
+        logger.debug("Already saved, skipping: %s", os.path.basename(dest))
+        return None
+
+    # Avoid overwriting if two attachments share a name in the same second
+    counter = 1
+    while os.path.exists(dest):
+        dest = os.path.join(config.PHOTOS_DIR, f"{ts}_{marker}_{base}_{counter}{extension}")
+        counter += 1
 
     with open(dest, "wb") as f:
         f.write(data)
@@ -104,25 +131,24 @@ def _poll_inbox():
         mail.login(config.EMAIL_ADDRESS, config.EMAIL_APP_PASSWORD)
         mail.select("INBOX")
 
-        # Search for unseen messages
-        status, data = mail.search(None, "UNSEEN")
+        status, data = mail.search(None, "ALL")
         if status != "OK":
             logger.warning("IMAP search failed: %s", status)
             return
 
         uids = data[0].split()
         if not uids:
-            logger.debug("No new messages")
+            logger.debug("No messages in inbox")
             return
 
-        logger.info("Found %d new message(s)", len(uids))
+        logger.info("Scanning %d message(s)", len(uids))
         saved_any = False
 
         for uid in uids:
             if uid in _processed_uids:
                 continue
 
-            status, msg_data = mail.fetch(uid, "(RFC822)")
+            status, msg_data = mail.fetch(uid, "(BODY.PEEK[])")
             if status != "OK":
                 continue
 

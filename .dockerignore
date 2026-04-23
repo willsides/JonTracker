@@ -7,3 +7,5 @@ static/photos/
 setup/
 .claude/
 CLAUDE.md
+docker-compose.local.yml
+.env.local

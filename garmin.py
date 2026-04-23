@@ -92,7 +92,9 @@ def _parse_kml(kml_text):
 
     for pm in placemarks:
         # Get coordinates
-        coords_el = pm.find(".//kml:Point/kml:coordinates", ns) or pm.find(".//Point/coordinates")
+        coords_el = pm.find(".//kml:Point/kml:coordinates", ns)
+        if coords_el is None:
+            coords_el = pm.find(".//Point/coordinates")
         if coords_el is None or not coords_el.text:
             continue
 
@@ -107,10 +109,9 @@ def _parse_kml(kml_text):
             continue
 
         # Get timestamp
-        when_el = (
-            pm.find(".//kml:TimeStamp/kml:when", ns)
-            or pm.find(".//TimeStamp/when")
-        )
+        when_el = pm.find(".//kml:TimeStamp/kml:when", ns)
+        if when_el is None:
+            when_el = pm.find(".//TimeStamp/when")
         ts_str = when_el.text.strip() if when_el is not None and when_el.text else None
 
         ts = None
@@ -123,25 +124,22 @@ def _parse_kml(kml_text):
                     continue
 
         if best_time is None or (ts and ts > best_time):
-            best = (lat, lon, ts_str)
+            best = (lat, lon, ts_str, pm)
             best_time = ts
 
-        # Also grab any text message from ExtendedData
-        # (Garmin sends the message body in a Data element named "Text")
-
     if best:
-        lat, lon, ts_str = best
+        lat, lon, ts_str, best_pm = best
 
-        # Look for message in the best placemark's extended data
         message = None
-        for pm in placemarks:
-            for data in pm.findall(".//kml:Data", ns) or pm.findall(".//Data"):
-                name = data.get("name", "")
-                if name.lower() in ("text", "message"):
-                    val = data.find("kml:value", ns) or data.find("value")
-                    if val is not None and val.text:
-                        message = val.text.strip()
-                        break
+        for data in best_pm.findall(".//kml:Data", ns) or best_pm.findall(".//Data"):
+            name = data.get("name", "")
+            if name.lower() in ("text", "message"):
+                val = data.find("kml:value", ns)
+                if val is None:
+                    val = data.find("value")
+                if val is not None and val.text:
+                    message = val.text.strip()
+                break
 
         with _lock:
             _state["lat"] = lat

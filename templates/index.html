@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JonTracker</title>
+  <title>Where in the world is Jon?</title>
+  <link rel="icon" type="image/webp" href="/static/thisisjon.webp">
+  <link rel="icon" type="image/png"  href="/static/thisisjon.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -19,25 +21,21 @@
       flex-direction: column;
     }
 
-    /* ── Header ── */
-    #header {
-      background: #111;
-      border-bottom: 1px solid #222;
-      padding: 10px 20px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
-      height: 52px;
+    /* ── Status dot (used in map overlays) ── */
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; flex-shrink: 0; }
+    .dot.ok   { background: #22c55e; }
+    .dot.warn { background: #f97316; }
+    .dot.err  { background: #ef4444; }
+
+    /* ── Map title overlay ── */
+    #map-title {
+      position: absolute; top: 0; left: 0; z-index: 1000;
+      padding: 14px 150px 14px 20px;
+      background: linear-gradient(to right, rgba(0,0,0,0.82) 50%, transparent);
+      pointer-events: none; white-space: nowrap;
     }
-    #header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #fff; }
-    #header h1 span { color: #f97316; }
-    #status-bar { display: flex; gap: 24px; font-size: 0.78rem; color: #888; }
-    #status-bar .item { display: flex; align-items: center; gap: 6px; }
-    #status-bar .dot { width: 7px; height: 7px; border-radius: 50%; background: #555; }
-    #status-bar .dot.ok { background: #22c55e; }
-    #status-bar .dot.warn { background: #f97316; }
-    #status-bar .dot.err { background: #ef4444; }
+    #map-title h1 { font-size: 1.05rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: #fff; }
+    #map-title h1 span { color: #f97316; }
 
     /* ── Map + Photo row ── */
     #content { display: flex; flex: 1; overflow: hidden; min-height: 0; }
@@ -58,6 +56,7 @@
       backdrop-filter: blur(4px); max-width: 260px; display: none;
     }
     #location-overlay .label { color: #888; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    #location-overlay .coords-row { display: flex; align-items: center; gap: 7px; }
     #location-overlay .coords { color: #fff; font-variant-numeric: tabular-nums; }
     #location-overlay .ts { color: #aaa; }
     #location-overlay .msg { color: #f97316; margin-top: 4px; font-style: italic; }
@@ -72,9 +71,39 @@
     /* ── Photo panel ── */
     #photo-panel { width: 50%; position: relative; background: #000; display: flex; flex-direction: column; }
     #slideshow { flex: 1; position: relative; overflow: hidden; }
-    .slide { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.8s ease; }
+    .slide { position: absolute; inset: 0; opacity: 0; transition: opacity 0.8s ease; overflow: hidden; }
     .slide.active { opacity: 1; }
-    .slide img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+    .slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    /* ── Ken Burns animations ── */
+    @keyframes kb-zoom-in    { from { transform: scale(1.0);                        } to { transform: scale(1.15);                       } }
+    @keyframes kb-zoom-out   { from { transform: scale(1.15);                       } to { transform: scale(1.0);                        } }
+    @keyframes kb-pan-right  { from { transform: scale(1.15) translateX(-6%);       } to { transform: scale(1.15) translateX(6%);        } }
+    @keyframes kb-pan-left   { from { transform: scale(1.15) translateX(6%);        } to { transform: scale(1.15) translateX(-6%);       } }
+    @keyframes kb-pan-up     { from { transform: scale(1.15) translateY(6%);        } to { transform: scale(1.15) translateY(-6%);       } }
+    @keyframes kb-pan-down   { from { transform: scale(1.15) translateY(-6%);       } to { transform: scale(1.15) translateY(6%);        } }
+    @keyframes kb-zoom-pan-1 { from { transform: scale(1.0)  translate(0%,  0%);   } to { transform: scale(1.15) translate( 6%, -6%);   } }
+    @keyframes kb-zoom-pan-2 { from { transform: scale(1.15) translate( 6%, -6%);   } to { transform: scale(1.0)  translate(0%,  0%);   } }
+    @keyframes kb-zoom-pan-3 { from { transform: scale(1.0)  translate( 0%,  0%);   } to { transform: scale(1.15) translate(-6%, -6%);   } }
+    @keyframes kb-zoom-pan-4 { from { transform: scale(1.15) translate(-6%, -6%);   } to { transform: scale(1.0)  translate( 0%,  0%);   } }
+
+    .kb-1  { animation: kb-zoom-in    12s ease-in-out forwards; }
+    .kb-2  { animation: kb-zoom-out   12s ease-in-out forwards; }
+    .kb-3  { animation: kb-pan-right  12s ease-in-out forwards; }
+    .kb-4  { animation: kb-pan-left   12s ease-in-out forwards; }
+    .kb-5  { animation: kb-pan-up     12s ease-in-out forwards; }
+    .kb-6  { animation: kb-pan-down   12s ease-in-out forwards; }
+    .kb-7  { animation: kb-zoom-pan-1 12s ease-in-out forwards; }
+    .kb-8  { animation: kb-zoom-pan-2 12s ease-in-out forwards; }
+    .kb-9  { animation: kb-zoom-pan-3 12s ease-in-out forwards; }
+    .kb-10 { animation: kb-zoom-pan-4 12s ease-in-out forwards; }
+
+    .slide-date {
+      position: absolute; bottom: 12px; right: 12px; z-index: 2;
+      color: rgba(255,255,255,0.88); font-size: 1.6rem;
+      text-shadow: 0 1px 6px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.6);
+      pointer-events: none; letter-spacing: 0.02em;
+    }
 
     #no-photos {
       position: absolute; inset: 0; display: flex; flex-direction: column;
@@ -84,14 +113,6 @@
     #no-photos p { font-size: 0.85rem; line-height: 1.5; }
     #no-photos code { background: #1a1a1a; padding: 2px 6px; border-radius: 3px; font-size: 0.8rem; color: #f97316; }
 
-    #photo-footer {
-      background: #111; border-top: 1px solid #222;
-      padding: 8px 16px; display: flex; align-items: center; justify-content: space-between;
-      font-size: 0.75rem; color: #555; flex-shrink: 0; height: 36px;
-    }
-    #photo-name { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60%; }
-    #progress-bar { height: 2px; background: #1a1a1a; flex-shrink: 0; }
-    #progress-fill { height: 100%; background: #f97316; width: 0%; transition: width 0.1s linear; }
 
     /* ── Elevation panel ── */
     #elevation-panel {
@@ -125,8 +146,18 @@
       display: none;
     }
     #elev-info.visible { display: block; }
-    #elev-info .mile { color: #f97316; font-weight: 600; font-size: 0.8rem; }
-    #elev-info .alt  { color: #cbd5e1; }
+    #elev-info .mile   { color: #f97316; font-weight: 600; font-size: 0.8rem; }
+    #elev-info .alt    { color: #cbd5e1; }
+    #elev-info .pct    { color: #cbd5e1; }
+    #elev-info .ascent { color: #cbd5e1; }
+
+    /* ── Jon marker animation ── */
+    @keyframes jon-rock {
+      0%   { transform: rotate(-8deg); }
+      50%  { transform: rotate(8deg); }
+      100% { transform: rotate(-8deg); }
+    }
+    .jon-marker { animation: jon-rock 2.4s ease-in-out infinite; transform-origin: center bottom; }
 
     /* No-elevation message */
     #elev-no-data {
@@ -138,25 +169,13 @@
 </head>
 <body>
 
-  <div id="header">
-    <h1>Jon<span>Tracker</span></h1>
-    <div id="status-bar">
-      <div class="item">
-        <div class="dot" id="gps-dot"></div>
-        <span id="gps-status">GPS: --</span>
-      </div>
-      <div class="item">
-        <div class="dot" style="background:#22c55e"></div>
-        <span id="email-status">Photos: --</span>
-      </div>
-      <div class="item"><span id="clock"></span></div>
-    </div>
-  </div>
-
   <!-- Map + Photos -->
   <div id="content">
     <div id="map-panel">
       <div id="map"></div>
+      <div id="map-title">
+        <h1>Where in the world is <span>Jon?</span></h1>
+      </div>
       <div id="no-location">
         <div class="icon">&#x1F4E1;</div>
         <p>Waiting for GPS signal<br>from inReach device&hellip;</p>
@@ -164,7 +183,10 @@
 
       <div id="location-overlay">
         <div class="label">Last known position</div>
-        <div class="coords" id="overlay-coords">--</div>
+        <div class="coords-row">
+          <div class="dot" id="overlay-gps-dot"></div>
+          <div class="coords" id="overlay-coords">--</div>
+        </div>
         <div class="ts" id="overlay-ts"></div>
         <div class="msg" id="overlay-msg"></div>
       </div>
@@ -180,11 +202,6 @@
           and they'll appear here automatically.</p>
         </div>
       </div>
-      <div id="progress-bar"><div id="progress-fill"></div></div>
-      <div id="photo-footer">
-        <span id="photo-counter"></span>
-        <span id="photo-name"></span>
-      </div>
     </div>
   </div>
 
@@ -196,6 +213,8 @@
     <div id="elev-info">
       <div class="mile" id="elev-mile"></div>
       <div class="alt" id="elev-alt"></div>
+      <div class="pct" id="elev-pct"></div>
+      <div class="ascent" id="elev-ascent"></div>
     </div>
     <div id="elev-no-data">Elevation data unavailable — add Z coordinates to pct.geojson</div>
   </div>
@@ -245,8 +264,8 @@
     // ── GPS marker ────────────────────────────────────────────────────────
     const markerIcon = L.divIcon({
       className: "",
-      html: `<div style="width:18px;height:18px;background:#f97316;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 2px #f97316,0 2px 8px rgba(0,0,0,0.5)"></div>`,
-      iconSize: [18, 18], iconAnchor: [9, 9],
+      html: `<img src="/static/thisisjon.webp" onerror="this.src='/static/thisisjon.png'" class="jon-marker" style="width:44px;height:44px;border-radius:50%;object-fit:cover;display:block;">`,
+      iconSize: [44, 44], iconAnchor: [22, 22],
     });
 
     let marker = null;
@@ -257,8 +276,7 @@
       fetch("/api/location")
         .then(r => r.json())
         .then(data => {
-          const dot = document.getElementById("gps-dot");
-          const statusEl = document.getElementById("gps-status");
+          const dot = document.getElementById("overlay-gps-dot");
 
           if (data.lat !== null && data.lon !== null) {
             const latlng = [data.lat, data.lon];
@@ -283,7 +301,6 @@
             document.getElementById("overlay-msg").textContent = data.message ? `"${data.message}"` : "";
 
             dot.className = "dot ok";
-            statusEl.textContent = `GPS: ${lat}, ${lon}`;
 
             updateElevationMarker(data.lat, data.lon);
 
@@ -291,12 +308,10 @@
             if (zoomLevel > 0) applyZoom(zoomLevel);
           } else {
             dot.className = "dot warn";
-            statusEl.textContent = data.error ? "GPS: error" : "GPS: waiting…";
           }
         })
         .catch(() => {
-          document.getElementById("gps-dot").className = "dot err";
-          document.getElementById("gps-status").textContent = "GPS: offline";
+          document.getElementById("overlay-gps-dot").className = "dot err";
         });
     }
 
@@ -394,25 +409,46 @@
       elevChart.update("none");
     }
 
-    // Chart.js plugin: draws the position marker line + dot
+    // Chart.js plugin: draws green fill up to current position, then marker line + dot
     const positionMarkerPlugin = {
       id: "positionMarker",
       afterDraw(chart) {
         if (currentMile === null) return;
-        const { ctx, chartArea: { top, bottom }, scales: { x, y } } = chart;
+        const { ctx, chartArea: { top, bottom, left, right }, scales: { x, y } } = chart;
         const px = x.getPixelForValue(currentMile);
 
         ctx.save();
 
-        // Vertical dashed line
+        // Clip all drawing to the chart area
         ctx.beginPath();
-        ctx.moveTo(px, top);
+        ctx.rect(left, top, right - left, bottom - top);
+        ctx.clip();
+
+        // Green fill under the elevation line up to current position
+        const data = chart.data.datasets[0].data;
+        ctx.beginPath();
+        ctx.moveTo(x.getPixelForValue(data[0].x), bottom);
+        for (let i = 0; i < data.length; i++) {
+          const ptX = x.getPixelForValue(data[i].x);
+          const ptY = y.getPixelForValue(data[i].y);
+          if (ptX >= px) {
+            // Interpolate to the exact currentMile x position
+            if (i > 0) {
+              const prevX = x.getPixelForValue(data[i - 1].x);
+              const prevY = y.getPixelForValue(data[i - 1].y);
+              const t = (px - prevX) / (ptX - prevX);
+              ctx.lineTo(px, prevY + t * (ptY - prevY));
+            } else {
+              ctx.lineTo(px, ptY);
+            }
+            break;
+          }
+          ctx.lineTo(ptX, ptY);
+        }
         ctx.lineTo(px, bottom);
-        ctx.strokeStyle = "#f97316";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 4]);
-        ctx.globalAlpha = 0.9;
-        ctx.stroke();
+        ctx.closePath();
+        ctx.fillStyle = "rgba(34, 197, 94, 0.35)";
+        ctx.fill();
 
         // Dot at elevation
         if (currentEle !== null) {
@@ -508,6 +544,9 @@
           }
           document.getElementById("elev-no-data").style.display = "none";
           buildElevationChart(data.points);
+          if (currentLat !== null && currentLon !== null) {
+            updateElevationMarker(currentLat, currentLon);
+          }
         })
         .catch(() => {});
     }
@@ -517,33 +556,42 @@
       if (!elevProfile || !elevProfile.has_elevation || !elevChart) return;
 
       const points = elevProfile.points;
-      let nearest = null;
+      let nearestIdx = 0;
       let minDist2 = Infinity;
       const cosLat = Math.cos(lat * Math.PI / 180);
 
-      for (const p of points) {
-        const dlat = p.lat - lat;
-        const dlon = (p.lon - lon) * cosLat;
+      for (let i = 0; i < points.length; i++) {
+        const dlat = points[i].lat - lat;
+        const dlon = (points[i].lon - lon) * cosLat;
         const d2 = dlat * dlat + dlon * dlon;
-        if (d2 < minDist2) { minDist2 = d2; nearest = p; }
+        if (d2 < minDist2) { minDist2 = d2; nearestIdx = i; }
       }
 
-      if (!nearest) return;
-
-      currentMile = nearest.dist;
-      currentEle  = nearest.ele;
+      currentMile = points[nearestIdx].dist;
+      currentEle  = points[nearestIdx].ele;
       elevChart.update("none");
+
+      // Cumulative ascent up to current position
+      let ascent = 0;
+      for (let i = 1; i <= nearestIdx; i++) {
+        const gain = points[i].ele - points[i - 1].ele;
+        if (gain > 0) ascent += gain;
+      }
+
+      const pct = (currentMile / elevProfile.total_miles * 100).toFixed(1);
 
       // Update info badge
       const info = document.getElementById("elev-info");
       info.classList.add("visible");
-      document.getElementById("elev-mile").textContent = `Mile ${Math.round(currentMile)}`;
-      document.getElementById("elev-alt").textContent  = `${currentEle.toLocaleString()} ft`;
+      document.getElementById("elev-mile").textContent   = `Mile ${Math.round(currentMile)}`;
+      document.getElementById("elev-pct").textContent    = `${pct}% complete`;
+      document.getElementById("elev-alt").textContent    = `${currentEle.toLocaleString()} ft`;
+      document.getElementById("elev-ascent").textContent = `${Math.round(ascent).toLocaleString()} ft ascended`;
     }
 
     // ── Slideshow ─────────────────────────────────────────────────────────
+    const KB_CLASSES = ['kb-1','kb-2','kb-3','kb-4','kb-5','kb-6','kb-7','kb-8','kb-9','kb-10'];
     let photos = [], currentIndex = 0, slides = [];
-    let progressTimer = null, progressStart = null;
 
     function updatePhotos() {
       fetch("/api/photos")
@@ -551,7 +599,6 @@
         .then(data => {
           const newPhotos = data.photos || [];
           if (newPhotos.length !== photos.length) { photos = newPhotos; rebuildSlideshow(); }
-          document.getElementById("email-status").textContent = `Photos: ${photos.length}`;
         });
     }
 
@@ -562,8 +609,6 @@
       const noPhotos = document.getElementById("no-photos");
       if (!photos.length) {
         noPhotos.style.display = "flex";
-        document.getElementById("photo-counter").textContent = "";
-        document.getElementById("photo-name").textContent = "";
         return;
       }
       noPhotos.style.display = "none";
@@ -574,6 +619,9 @@
         img.src = `/photos/${encodeURIComponent(filename)}`;
         img.alt = filename;
         slide.appendChild(img);
+        const dateEl = document.createElement("div");
+        dateEl.className = "slide-date";
+        slide.appendChild(dateEl);
         container.appendChild(slide);
         slides.push(slide);
       });
@@ -581,12 +629,42 @@
       showSlide(currentIndex);
     }
 
+    function parsePhotoDate(filename) {
+      const m = filename.match(/^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})_E_/);
+      if (!m) return null;
+      return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+    }
+
+    function relativeTime(date) {
+      const diffMs  = Date.now() - date.getTime();
+      const mins    = Math.floor(diffMs / 60000);
+      const hours   = Math.floor(diffMs / 3600000);
+      const days    = Math.floor(diffMs / 86400000);
+      const weeks   = Math.floor(days / 7);
+      if (mins  <  60) return mins  <= 1  ? 'just now'           : `${mins} minutes ago`;
+      if (hours <  24) return hours === 1 ? '1 hour ago'         : `${hours} hours ago`;
+      if (days  <   7) return days  === 1 ? 'yesterday'          : `${days} days ago`;
+      if (days  <  30) return weeks === 1 ? '1 week ago'         : `${weeks} weeks ago`;
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
     function showSlide(index) {
       slides.forEach((s, i) => s.classList.toggle("active", i === index));
       currentIndex = index;
-      const name = (photos[index] || "").replace(/^\d{8}_\d{6}_/, "");
-      document.getElementById("photo-counter").textContent = `${index + 1} / ${photos.length}`;
-      document.getElementById("photo-name").textContent = name;
+
+      const img = slides[index]?.querySelector("img");
+      if (img) {
+        KB_CLASSES.forEach(c => img.classList.remove(c));
+        void img.offsetWidth; // restart animation
+        img.classList.add(KB_CLASSES[Math.floor(Math.random() * KB_CLASSES.length)]);
+      }
+
+      const dateEl = slides[index]?.querySelector(".slide-date");
+      if (dateEl) {
+        const d = parsePhotoDate(photos[index] || "");
+        dateEl.textContent = d ? relativeTime(d) : "";
+      }
+
       startProgress();
     }
 
@@ -594,38 +672,21 @@
       if (slides.length) showSlide((currentIndex + 1) % slides.length);
     }
 
+    let slideTimer = null;
     function startProgress() {
-      if (progressTimer) clearInterval(progressTimer);
-      const fill = document.getElementById("progress-fill");
-      fill.style.transition = "none";
-      fill.style.width = "0%";
-      progressStart = Date.now();
-      progressTimer = setInterval(() => {
-        const pct = Math.min(((Date.now() - progressStart) / SLIDESHOW_INTERVAL) * 100, 100);
-        fill.style.transition = "width 0.1s linear";
-        fill.style.width = pct + "%";
-        if (pct >= 100) { clearInterval(progressTimer); nextSlide(); }
-      }, 100);
-    }
-
-    // ── Clock ─────────────────────────────────────────────────────────────
-    function updateClock() {
-      document.getElementById("clock").textContent = new Date().toLocaleTimeString([], {
-        hour: "2-digit", minute: "2-digit", second: "2-digit",
-      });
+      if (slideTimer) clearTimeout(slideTimer);
+      slideTimer = setTimeout(nextSlide, SLIDESHOW_INTERVAL);
     }
 
     // ── Init ──────────────────────────────────────────────────────────────
     updateLocation();
     updatePhotos();
-    updateClock();
     fetchRadar();
     loadElevationProfile();
     startZoomCycle();
 
     setInterval(updateLocation, LOCATION_REFRESH);
     setInterval(updatePhotos,  PHOTOS_REFRESH);
-    setInterval(updateClock,   1000);
     setInterval(fetchRadar,    RADAR_REFRESH);
   </script>
 </body>
