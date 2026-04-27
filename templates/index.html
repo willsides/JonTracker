@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Where in the world is Jon?</title>
   <link rel="icon" type="image/webp" href="/static/thisisjon.webp">
   <link rel="icon" type="image/png"  href="/static/thisisjon.png">
@@ -15,6 +15,7 @@
       color: #e0e0e0;
       font-family: 'Segoe UI', system-ui, sans-serif;
       height: 100vh;
+      height: 100dvh;
       width: 100vw;
       overflow: hidden;
       display: flex;
@@ -258,6 +259,7 @@
       .slide-date { font-size: 0.7rem; }
 
       #elevation-canvas-wrap { inset: 8px 0 4px 0; }
+      #elevation-panel { padding-bottom: env(safe-area-inset-bottom, 0px); }
     }
 
     /* Film reel strip */
