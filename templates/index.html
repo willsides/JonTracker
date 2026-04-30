@@ -52,9 +52,11 @@
     /* ── Location overlay ── */
     #location-overlay {
       position: absolute; bottom: 16px; left: 16px; z-index: 1000;
-      background: rgba(0,0,0,0.75); border: 1px solid #333; border-radius: 8px;
+      background: rgba(12,12,12,0.55); border: 1px solid rgba(255,255,255,0.13); border-radius: 14px;
       padding: 10px 14px; font-size: 0.78rem; line-height: 1.6;
-      backdrop-filter: blur(4px); max-width: 260px; display: none;
+      backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+      max-width: 260px; display: none;
     }
     #location-overlay .label { color: #888; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; }
     #location-overlay .coords-row { display: flex; align-items: center; gap: 7px; }
@@ -284,6 +286,44 @@
     }
     .lb-thumb:hover { opacity: 0.75; }
     .lb-thumb.lb-active { opacity: 1; border-color: #f97316; }
+
+    /* ── Zoom-cycle toast ── */
+    #zoom-toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: rgba(12,12,12,0.82); color: #e0e0e0;
+      border: 1px solid rgba(255,255,255,0.13); border-radius: 8px;
+      padding: 8px 20px; font-size: 0.78rem; letter-spacing: 0.06em;
+      z-index: 9998; pointer-events: none;
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    #zoom-toast.visible { opacity: 1; }
+
+    /* ── External link buttons ── */
+    #map-links {
+      position: absolute; bottom: 16px; right: 16px; z-index: 1000;
+      display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+    }
+    .map-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 16px 8px 10px;
+      border-radius: 999px;
+      background: rgba(12,12,12,0.55);
+      border: 1px solid rgba(255,255,255,0.13);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.07);
+      text-decoration: none;
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+    .map-link:hover {
+      background: rgba(30,30,30,0.82);
+      box-shadow: 0 4px 18px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+    .map-link img { width: 26px; height: 26px; display: block; flex-shrink: 0; border-radius: 6px; }
+    .map-link-label {
+      color: #fff; font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
   </style>
 </head>
 <body>
@@ -295,10 +335,28 @@
       <div id="map-title">
         <h1>Where in the world is <span>Jon?</span></h1>
       </div>
+
       <div id="no-location">
         <div class="icon">&#x1F4E1;</div>
         <p>Waiting for GPS signal<br>from inReach device&hellip;</p>
       </div>
+
+      {% if strava_url or garmin_mapshare_url %}
+      <div id="map-links">
+        {% if strava_url %}
+        <a href="{{ strava_url }}" target="_blank" rel="noopener noreferrer" class="map-link">
+          <img src="/static/strava-icon.png" alt="">
+          <span class="map-link-label">Strava</span>
+        </a>
+        {% endif %}
+        {% if garmin_mapshare_url %}
+        <a href="{{ garmin_mapshare_url }}" target="_blank" rel="noopener noreferrer" class="map-link">
+          <img src="/static/garmin-explore.svg" alt="">
+          <span class="map-link-label">Garmin</span>
+        </a>
+        {% endif %}
+      </div>
+      {% endif %}
 
       <div id="location-overlay">
         <div class="label">Last known position</div>
@@ -340,6 +398,8 @@
     </div>
     <div id="elev-no-data">Elevation data unavailable — add Z coordinates to pct.geojson</div>
   </div>
+
+  <div id="zoom-toast"></div>
 
   <!-- Lightbox -->
   <div id="lightbox" style="display:none" role="dialog" aria-modal="true">
@@ -442,7 +502,7 @@
             updateElevationMarker(data.lat, data.lon);
 
             // If already in a zoomed level, re-center on the updated position
-            if (zoomLevel > 0) applyZoom(zoomLevel);
+            if (zoomLevel > 0) map.panTo([data.lat, data.lon], { animate: true, duration: 1 });
           } else {
             dot.className = "dot warn";
           }
@@ -456,23 +516,44 @@
     // Three levels: 0 = full PCT, 1 = 500mi FOV, 2 = 100mi FOV
     // Zoom levels chosen for the PCT's latitude band (~33–49°N).
     // Level 1 at zoom 6 covers ~500mi width; level 2 at zoom 9 covers ~100mi.
-    const ZOOM_CYCLE_INTERVAL = 60000;
+    const ZOOM_CYCLE_INTERVAL = 20000;
     const ZOOM_LEVELS = [
       { zoom: null },   // 0: full PCT — use fitBounds
-      // { zoom: 8    },   // 1: ~500mi FOV
+      { zoom: 8    },   // 1: ~500mi FOV
       { zoom: 11   },   // 2: ~100mi FOV
     ];
 
     let zoomLevel = 0;
     let zoomCycleTimer = null;
+    let zoomCyclingEnabled = true;
 
+    function showZoomToast(msg) {
+      const toast = document.getElementById("zoom-toast");
+      toast.textContent = msg;
+      toast.classList.add("visible");
+      clearTimeout(toast._hideTimer);
+      toast._hideTimer = setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    function toggleZoomCycle() {
+      zoomCyclingEnabled = !zoomCyclingEnabled;
+      if (zoomCyclingEnabled) {
+        showZoomToast("Zoom cycling on");
+        startZoomCycle();
+      } else {
+        showZoomToast("Zoom cycling off");
+        if (zoomCycleTimer) { clearInterval(zoomCycleTimer); zoomCycleTimer = null; }
+        zoomLevel = 0;
+        applyZoom(0);
+      }
+    }
 
     function applyZoom(level) {
       if (level === 0 || currentLat === null) {
-        map.flyToBounds(PCT_BOUNDS, { padding: [10, 10], duration: 5 });
+        map.fitBounds(PCT_BOUNDS, { animate: true, padding: [10, 10], duration: 6 });
       } else {
         const { zoom } = ZOOM_LEVELS[level];
-        map.flyTo([currentLat, currentLon], zoom, { duration: 30 });
+        map.setView([currentLat, currentLon], zoom, { animate: true, duration: 6 });
       }
     }
 
@@ -791,7 +872,7 @@
       if (hours <  24) return hours === 1 ? '1 hour ago'         : `${hours} hours ago`;
       if (days  <   7) return days  === 1 ? 'yesterday'          : `${days} days ago`;
       if (days  <  30) return weeks === 1 ? '1 week ago'         : `${weeks} weeks ago`;
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
     const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
@@ -926,6 +1007,7 @@
     }, { passive: true });
 
     document.addEventListener("keydown", e => {
+      if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) { toggleZoomCycle(); return; }
       if (!lbOpen) return;
       if (e.key === "ArrowRight" || e.key === "ArrowDown") { e.preventDefault(); showLightboxPhoto(lbIndex + 1, true); }
       if (e.key === "ArrowLeft"  || e.key === "ArrowUp")   { e.preventDefault(); showLightboxPhoto(lbIndex - 1, true); }
@@ -937,7 +1019,6 @@
     updatePhotos();
     fetchRadar();
     loadElevationProfile();
-    startZoomCycle();
 
     setInterval(updateLocation, LOCATION_REFRESH);
     setInterval(updatePhotos,  PHOTOS_REFRESH);

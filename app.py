@@ -103,6 +103,8 @@ def index():
         slideshow_interval=config.SLIDESHOW_INTERVAL,
         stadia_api_key=config.STADIA_API_KEY,
         has_pct=os.path.exists(config.PCT_GEOJSON),
+        strava_url=config.STRAVA_URL,
+        garmin_mapshare_url=config.GARMIN_MAPSHARE_URL,
     )
 
 

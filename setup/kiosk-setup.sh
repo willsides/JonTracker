@@ -18,7 +18,7 @@ echo
 echo "[1/5] Installing packages..."
 sudo apt-get update -qq
 sudo apt-get install -y --no-install-recommends \
-    chromium-browser \
+    chromium \
     unclutter \
     xdotool
 
@@ -57,7 +57,7 @@ cat > "$HOME_DIR/.config/lxsession/LXDE-pi/autostart" << AUTOSTART
 @unclutter -idle 0.5 -root
 
 # Launch Chromium in kiosk mode
-@chromium-browser \
+@chromium \
   --kiosk \
   --noerrdialogs \
   --disable-infobars \

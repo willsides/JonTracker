@@ -38,6 +38,10 @@ SLIDESHOW_INTERVAL = int(os.getenv("SLIDESHOW_INTERVAL", "8"))  # seconds per ph
 STADIA_API_KEY = _get("STADIA_API_KEY")
 PCT_GEOJSON = os.path.join(os.path.dirname(__file__), "static", "pct.geojson")
 
+# External links (optional)
+STRAVA_URL = os.getenv("STRAVA_URL", "")
+GARMIN_MAPSHARE_URL = os.getenv("GARMIN_MAPSHARE_URL", "")
+
 # Flask
 FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
 FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))
