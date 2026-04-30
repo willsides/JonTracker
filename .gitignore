@@ -4,7 +4,6 @@ __pycache__/
 *.pyo
 static/photos/
 *.Zone.Identifier
-setup/
 .claude/
 CLAUDE.md
 docker-compose.local.yml
