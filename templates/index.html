@@ -525,7 +525,7 @@
 
     let zoomLevel = 0;
     let zoomCycleTimer = null;
-    let zoomCyclingEnabled = true;
+    let zoomCyclingEnabled = false;
 
     function showZoomToast(msg) {
       const toast = document.getElementById("zoom-toast");
@@ -1019,6 +1019,7 @@
     updatePhotos();
     fetchRadar();
     loadElevationProfile();
+    if (!isTouchDevice) { zoomCyclingEnabled = true; startZoomCycle(); }
 
     setInterval(updateLocation, LOCATION_REFRESH);
     setInterval(updatePhotos,  PHOTOS_REFRESH);
