@@ -493,7 +493,7 @@
             document.getElementById("overlay-coords").textContent = `${lat}, ${lon}`;
             if (data.timestamp) {
               const d = new Date(data.timestamp);
-              document.getElementById("overlay-ts").textContent = isNaN(d) ? data.timestamp : d.toLocaleString();
+              document.getElementById("overlay-ts").textContent = isNaN(d) ? data.timestamp : `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;
             }
             document.getElementById("overlay-msg").textContent = data.message ? `"${data.message}"` : "";
 
@@ -1015,6 +1015,15 @@
     });
 
     // ── Init ──────────────────────────────────────────────────────────────
+    if (new URLSearchParams(location.search).has('kiosk')) {
+      const links = document.getElementById('map-links');
+      if (links) links.style.display = 'none';
+      document.body.style.cursor = 'none';
+      const style = document.createElement('style');
+      style.textContent = '* { cursor: none !important; }';
+      document.head.appendChild(style);
+    }
+
     updateLocation();
     updatePhotos();
     fetchRadar();

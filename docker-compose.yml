@@ -11,6 +11,8 @@ services:
       - EMAIL_APP_PASSWORD_FILE=/run/secrets/email_app_password
       - STADIA_API_KEY_FILE=/run/secrets/stadia_api_key
       - SECRET_KEY_FILE=/run/secrets/secret_key
+      - STRAVA_URL=
+      - GARMIN_MAPSHARE_URL=
       - GARMIN_POLL_INTERVAL=300
       - EMAIL_IMAP_SERVER=imap.gmail.com
       - EMAIL_POLL_INTERVAL=60
