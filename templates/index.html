@@ -1018,10 +1018,6 @@
     if (new URLSearchParams(location.search).has('kiosk')) {
       const links = document.getElementById('map-links');
       if (links) links.style.display = 'none';
-      document.body.style.cursor = 'none';
-      const style = document.createElement('style');
-      style.textContent = '* { cursor: none !important; }';
-      document.head.appendChild(style);
     }
 
     updateLocation();
