@@ -21,7 +21,24 @@ import config
 
 logger = logging.getLogger(__name__)
 
-_processed_uids = set()  # Track already-downloaded message UIDs
+_UIDS_FILE = os.path.join(os.path.dirname(__file__), "data", "processed_uids.txt")
+
+
+def _load_processed_uids():
+    try:
+        with open(_UIDS_FILE) as f:
+            return {line.strip().encode() for line in f if line.strip()}
+    except FileNotFoundError:
+        return set()
+
+
+def _save_processed_uid(uid):
+    os.makedirs(os.path.dirname(_UIDS_FILE), exist_ok=True)
+    with open(_UIDS_FILE, "a") as f:
+        f.write(uid.decode() + "\n")
+
+
+_processed_uids = _load_processed_uids()
 
 
 def _sanitize_filename(name):
@@ -215,6 +232,7 @@ def _poll_inbox():
                 saved_any = True
 
             _processed_uids.add(uid)
+            _save_processed_uid(uid)
 
         if saved_any:
             _prune_old_photos()
