@@ -840,12 +840,26 @@
     const KB_CLASSES = ['kb-1','kb-2','kb-3','kb-4','kb-5','kb-6','kb-7','kb-8','kb-9','kb-10'];
     let photos = [], currentIndex = 0, slides = [];
 
+    const _thumbCache = [];
+
+    function preloadThumbs(photoList) {
+      photoList.forEach(filename => {
+        const img = new Image();
+        img.src = photoUrl(filename, 'thumb');
+        _thumbCache.push(img); // keep references so GC doesn't discard them
+      });
+    }
+
     function updatePhotos() {
       fetch("/api/photos")
         .then(r => r.json())
         .then(data => {
           const newPhotos = data.photos || [];
-          if (newPhotos.length !== photos.length) { photos = newPhotos; rebuildSlideshow(); }
+          if (newPhotos.length !== photos.length) {
+            photos = newPhotos;
+            rebuildSlideshow();
+            preloadThumbs(newPhotos);
+          }
         });
     }
 
