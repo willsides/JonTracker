@@ -179,6 +179,13 @@
     }
     #lightbox-close:hover { color: #fff; }
 
+    #lightbox-download {
+      display: flex; align-items: center;
+      color: rgba(255,255,255,0.5); padding: 4px 8px;
+      text-decoration: none; transition: color 0.15s;
+    }
+    #lightbox-download:hover { color: #fff; }
+
     #lightbox-main {
       flex: 1; position: relative; display: flex;
       align-items: center; justify-content: center;
@@ -406,7 +413,10 @@
     <div id="lightbox-topbar">
       <span id="lightbox-counter"></span>
       <div id="lightbox-caption"></div>
-      <button id="lightbox-close" title="Close (Esc)">&#x2715;</button>
+      <div style="display:flex;align-items:center;gap:4px">
+        <a id="lightbox-download" href="#" download title="Download Full Quality Photo"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="1" x2="8" y2="10"/><polyline points="4,6 8,10 12,6"/><line x1="2" y1="14" x2="14" y2="14"/></svg></a>
+        <button id="lightbox-close" title="Close (Esc)">&#x2715;</button>
+      </div>
     </div>
     <div id="lightbox-main">
       <button class="lb-nav" id="lb-prev" title="Previous (&#x2190;)" aria-label="Previous"></button>
@@ -816,6 +826,16 @@
       document.getElementById("elev-ascent").textContent = `${Math.round(ascent).toLocaleString()} ft ascended`;
     }
 
+    // ── Photo URL helpers ─────────────────────────────────────────────────
+    // Variants are stored as JPEG under /photos/display/ and /photos/thumb/.
+    // Falls back to original on the server if a variant hasn't been generated yet.
+    function photoUrl(filename, size) {
+      const base = encodeURIComponent(filename.replace(/\.[^.]+$/, '') + '.jpg');
+      if (size === 'display') return `/photos/display/${base}`;
+      if (size === 'thumb')   return `/photos/thumb/${base}`;
+      return `/photos/${encodeURIComponent(filename)}`;
+    }
+
     // ── Slideshow ─────────────────────────────────────────────────────────
     const KB_CLASSES = ['kb-1','kb-2','kb-3','kb-4','kb-5','kb-6','kb-7','kb-8','kb-9','kb-10'];
     let photos = [], currentIndex = 0, slides = [];
@@ -843,7 +863,7 @@
         const slide = document.createElement("div");
         slide.className = "slide";
         const img = document.createElement("img");
-        img.src = `/photos/${encodeURIComponent(filename)}`;
+        img.src = photoUrl(filename, 'display');
         img.alt = filename;
         slide.appendChild(img);
         const dateEl = document.createElement("div");
@@ -953,7 +973,7 @@
       track.innerHTML = "";
       photos.forEach((filename, i) => {
         const img = document.createElement("img");
-        img.src = `/photos/${encodeURIComponent(filename)}`;
+        img.src = photoUrl(filename, 'thumb');
         img.className = "lb-thumb" + (i === lbIndex ? " lb-active" : "");
         img.addEventListener("click", () => showLightboxPhoto(i, true));
         track.appendChild(img);
@@ -963,13 +983,24 @@
     const THUMB_STEP   = 70;  // 64px width + 6px margin (3px each side)
     const THUMB_CENTER = 35;  // 32px half-width + 3px left-margin
 
+    let filmOffset = 0;
+
+    function clampFilmOffset(offset) {
+      const film = document.getElementById("lightbox-film");
+      const max = film.offsetWidth / 2 - THUMB_CENTER;
+      const min = max - (photos.length - 1) * THUMB_STEP;
+      return Math.max(min, Math.min(max, offset));
+    }
+
     function showLightboxPhoto(index, fade) {
       lbIndex = ((index % photos.length) + photos.length) % photos.length;
 
       const mainImg = document.getElementById("lightbox-img");
       if (fade) mainImg.style.opacity = "0";
-      mainImg.src = `/photos/${encodeURIComponent(photos[lbIndex])}`;
+      mainImg.src = photoUrl(photos[lbIndex], 'display');
       mainImg.onload = () => { mainImg.style.opacity = "1"; };
+
+      document.getElementById("lightbox-download").href = photoUrl(photos[lbIndex], 'original');
 
       document.getElementById("lightbox-counter").textContent =
         `${lbIndex + 1} / ${photos.length}`;
@@ -982,12 +1013,12 @@
 
       const film  = document.getElementById("lightbox-film");
       const track = document.getElementById("lb-film-track");
-      const offset = film.offsetWidth / 2 - THUMB_CENTER - lbIndex * THUMB_STEP;
+      filmOffset = clampFilmOffset(film.offsetWidth / 2 - THUMB_CENTER - lbIndex * THUMB_STEP);
       if (!fade) {
         track.style.transition = "none";
         void track.offsetWidth;
       }
-      track.style.transform = `translateX(${offset}px)`;
+      track.style.transform = `translateX(${filmOffset}px)`;
       if (!fade) track.style.transition = "";
     }
 
@@ -1006,6 +1037,30 @@
       if (Math.abs(dx) > 50) showLightboxPhoto(dx < 0 ? lbIndex + 1 : lbIndex - 1, true);
     }, { passive: true });
 
+    // ── Filmstrip scroll: mouse wheel ─────────────────────────────────────
+    document.getElementById("lightbox-film").addEventListener("wheel", e => {
+      e.preventDefault();
+      const track = document.getElementById("lb-film-track");
+      filmOffset = clampFilmOffset(filmOffset - e.deltaY);
+      track.style.transition = "none";
+      track.style.transform = `translateX(${filmOffset}px)`;
+    }, { passive: false });
+
+    // ── Filmstrip scroll: touch swipe ─────────────────────────────────────
+    let filmTouchStartX = 0, filmTouchStartOffset = 0;
+    document.getElementById("lightbox-film").addEventListener("touchstart", e => {
+      filmTouchStartX = e.touches[0].clientX;
+      filmTouchStartOffset = filmOffset;
+      document.getElementById("lb-film-track").style.transition = "none";
+    }, { passive: true });
+    document.getElementById("lightbox-film").addEventListener("touchmove", e => {
+      filmOffset = clampFilmOffset(filmTouchStartOffset + e.touches[0].clientX - filmTouchStartX);
+      document.getElementById("lb-film-track").style.transform = `translateX(${filmOffset}px)`;
+    }, { passive: true });
+    document.getElementById("lightbox-film").addEventListener("touchend", () => {
+      document.getElementById("lb-film-track").style.transition = "";
+    }, { passive: true });
+
     document.addEventListener("keydown", e => {
       if (e.key === "t" && !e.ctrlKey && !e.metaKey && !e.altKey) { toggleZoomCycle(); return; }
       if (!lbOpen) return;
@@ -1015,16 +1070,18 @@
     });
 
     // ── Init ──────────────────────────────────────────────────────────────
-    if (new URLSearchParams(location.search).has('kiosk')) {
+    const isKiosk = new URLSearchParams(location.search).has('kiosk');
+    if (isKiosk) {
       const links = document.getElementById('map-links');
       if (links) links.style.display = 'none';
+      zoomCyclingEnabled = true;
+      startZoomCycle();
     }
 
     updateLocation();
     updatePhotos();
     fetchRadar();
     loadElevationProfile();
-    if (!isTouchDevice) { zoomCyclingEnabled = true; startZoomCycle(); }
 
     setInterval(updateLocation, LOCATION_REFRESH);
     setInterval(updatePhotos,  PHOTOS_REFRESH);

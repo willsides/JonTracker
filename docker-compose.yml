@@ -28,6 +28,7 @@ services:
       - secret_key
     volumes:
       - photos:/app/static/photos
+      - analytics:/app/data
     security_opt:
       - no-new-privileges:true
 
@@ -45,3 +46,4 @@ secrets:
 
 volumes:
   photos:
+  analytics:

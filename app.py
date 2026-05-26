@@ -9,6 +9,7 @@ import os
 
 from flask import Flask, jsonify, render_template, send_from_directory, send_file, abort, request
 
+import analytics
 import config
 import elevation
 import email_receiver
@@ -22,6 +23,15 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
+
+
+@app.before_request
+def log_visit():
+    analytics.record_visit(
+        path=request.path,
+        ip=request.remote_addr,
+        user_agent=request.headers.get("User-Agent"),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -55,9 +65,35 @@ def api_photos():
     })
 
 
+@app.route("/photos/display/<filename>")
+def serve_photo_display(filename):
+    """Serve a display-quality resized photo, falling back to the original."""
+    display_dir = os.path.join(config.PHOTOS_DIR, "display")
+    if os.path.exists(os.path.join(display_dir, filename)):
+        return send_from_directory(display_dir, filename)
+    base = os.path.splitext(filename)[0]
+    for ext in config.ALLOWED_EXTENSIONS:
+        if os.path.exists(os.path.join(config.PHOTOS_DIR, base + ext)):
+            return send_from_directory(config.PHOTOS_DIR, base + ext)
+    abort(404)
+
+
+@app.route("/photos/thumb/<filename>")
+def serve_photo_thumb(filename):
+    """Serve a thumbnail-quality resized photo, falling back to the original."""
+    thumb_dir = os.path.join(config.PHOTOS_DIR, "thumb")
+    if os.path.exists(os.path.join(thumb_dir, filename)):
+        return send_from_directory(thumb_dir, filename)
+    base = os.path.splitext(filename)[0]
+    for ext in config.ALLOWED_EXTENSIONS:
+        if os.path.exists(os.path.join(config.PHOTOS_DIR, base + ext)):
+            return send_from_directory(config.PHOTOS_DIR, base + ext)
+    abort(404)
+
+
 @app.route("/photos/<path:filename>")
 def serve_photo(filename):
-    """Serve a photo from the photos directory."""
+    """Serve the original full-resolution photo."""
     return send_from_directory(config.PHOTOS_DIR, filename)
 
 
@@ -95,6 +131,15 @@ def api_elevation_profile():
 # ---------------------------------------------------------------------------
 # Main display page
 # ---------------------------------------------------------------------------
+
+@app.route("/api/analytics")
+def api_analytics():
+    """Return daily page-view counts for the last 30 days. Localhost only."""
+    if request.remote_addr not in ("127.0.0.1", "::1"):
+        return jsonify({"error": "localhost only"}), 403
+    days = request.args.get("days", 30, type=int)
+    return jsonify(analytics.get_stats(days))
+
 
 @app.route("/")
 def index():

@@ -30,6 +30,8 @@ EMAIL_POLL_INTERVAL = int(os.getenv("EMAIL_POLL_INTERVAL", "60"))  # seconds
 PHOTOS_DIR = os.path.join(os.path.dirname(__file__), "static", "photos")
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".heic", ".webp"}
 MAX_PHOTOS = int(os.getenv("MAX_PHOTOS", "200"))
+PHOTO_DISPLAY_MAX_WIDTH = int(os.getenv("PHOTO_DISPLAY_MAX_WIDTH", "1600"))
+PHOTO_THUMB_MAX_WIDTH = int(os.getenv("PHOTO_THUMB_MAX_WIDTH", "400"))
 
 # Slideshow
 SLIDESHOW_INTERVAL = int(os.getenv("SLIDESHOW_INTERVAL", "8"))  # seconds per photo
@@ -41,6 +43,9 @@ PCT_GEOJSON = os.path.join(os.path.dirname(__file__), "static", "pct.geojson")
 # External links (optional)
 STRAVA_URL = os.getenv("STRAVA_URL", "")
 GARMIN_MAPSHARE_URL = os.getenv("GARMIN_MAPSHARE_URL", "")
+
+# Analytics
+ANALYTICS_DB = os.path.join(os.path.dirname(__file__), "data", "analytics.db")
 
 # Flask
 FLASK_HOST = os.getenv("FLASK_HOST", "0.0.0.0")
