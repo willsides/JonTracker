@@ -951,6 +951,7 @@
     // ── Lightbox ──────────────────────────────────────────────────────────
     let lbOpen = false;
     let lbIndex = 0;
+    let lbFadeGen = 0;
 
     function openLightbox(index) {
       if (!photos.length) return;
@@ -994,11 +995,31 @@
 
     function showLightboxPhoto(index, fade) {
       lbIndex = ((index % photos.length) + photos.length) % photos.length;
+      const gen = ++lbFadeGen;
 
       const mainImg = document.getElementById("lightbox-img");
-      if (fade) mainImg.style.opacity = "0";
-      mainImg.src = photoUrl(photos[lbIndex], 'display');
-      mainImg.onload = () => { mainImg.style.opacity = "1"; };
+
+      function loadPhoto() {
+        if (gen !== lbFadeGen) return;
+        mainImg.src = photoUrl(photos[lbIndex], 'display');
+        mainImg.onload = () => { if (gen === lbFadeGen) mainImg.style.opacity = "1"; };
+      }
+
+      if (fade) {
+        if (mainImg.style.opacity === "0") {
+          // Already faded out (rapid navigation) — swap immediately
+          loadPhoto();
+        } else {
+          mainImg.style.opacity = "0";
+          mainImg.addEventListener("transitionend", function h() {
+            mainImg.removeEventListener("transitionend", h);
+            loadPhoto();
+          });
+        }
+      } else {
+        mainImg.style.opacity = "1";
+        loadPhoto();
+      }
 
       document.getElementById("lightbox-download").href = photoUrl(photos[lbIndex], 'original');
 
